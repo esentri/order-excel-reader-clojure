@@ -50,8 +50,7 @@
               "s" (reset! cell-info [:s (get-column-as-keyword (.getValue attributes "r"))])
               "n" (reset! cell-info [:n (get-column-as-keyword (.getValue attributes "r"))])
               nil)
-          "v" (do 
-                (reset! value nil))
+          "v" (reset! value nil)
           nil
         ))
       (endElement [uri localName name]
@@ -79,6 +78,7 @@
 (def ad0 (fnil + 0 0))
 (defn write-cell [out-row index value]
   (.setCellValue (.createCell out-row index) value))
+
 (defn callback [item-sheet row]
   (let [order (rename-keys row {:A :company, :B :department, :C :item, :D :amount})]
     (when (not= "Menge" (:amount order))
