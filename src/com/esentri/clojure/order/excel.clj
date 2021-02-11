@@ -72,7 +72,6 @@
   (let [parser (SAXHelper/newXMLReader)
         _  (.setContentHandler parser (sheet-handler sst rowfn))]
         parser))
-(def order-summary-item (atom {}))
 (def order-summary-company (atom {}))
 (def item-row-count (atom 0))
 (def ad0 (fnil + 0 0))
@@ -93,19 +92,9 @@
         (write-cell-fn 3 amount) ;amount
         (write-cell-fn 4 price)
         (write-cell-fn 5 (* price amount))
-        (swap! order-summary-company update-in [(:company order) item-key] ad0 amount)
-        (swap! order-summary-item update-in [item-key] ad0 amount)))))
+        (swap! order-summary-company update-in [(:company order) item-key] ad0 amount)))))
 
 (defn finalize [swb]
-  (let [summary-row-count (atom 0)
-        summary-sheet (.createSheet swb "Summe Artikel")
-        write-cell-fn (partial write-cell (.createRow summary-sheet (swap! summary-row-count inc)))]
-    (doseq [[item amount] @order-summary-item]
-      (let [price (get PRICE item)]
-        (write-cell-fn 0 (name item))
-        (write-cell-fn 1 amount)
-        (write-cell-fn 2 price)
-        (write-cell-fn 3 (* price amount)))))
   (let [company-row-count (atom 0)
         company-sheet (.createSheet swb "Summe je Firma")
         write-cell-fn (partial write-cell (.createRow company-sheet (swap! company-row-count inc)))
@@ -125,7 +114,6 @@
         item-sheet (.createSheet out-wb "Einzelposten")
         r     (XSSFReader. (OPCPackage/open filename PackageAccess/READ))
         parser (getParser (.getSharedStringsTable r) (partial callback item-sheet))]
-    (reset! order-summary-item {})
     (reset! order-summary-company {})
     (reset! item-row-count 0)
     (.parse parser (InputSource. (.next (.getSheetsData r))))
