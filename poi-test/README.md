@@ -6,6 +6,7 @@
     $ lein uberjar
 
 ## Installation
+    $ lein install
 
 ## Usage
 
