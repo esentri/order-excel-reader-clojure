@@ -3,7 +3,7 @@
     :name com.esentri.clojure.excel.reader
     :prefix "cls-"
     :main false
-    :methods [[execute [String String] void]])
+    :methods [^:static [execute [String String] void]])
   (:use [clojure.java.io :only [output-stream]])
   (:import
     (org.apache.poi.xssf.usermodel XSSFWorkbook XSSFRichTextString)
@@ -99,10 +99,13 @@
 (defn finalize [swb]
   (let [summary-row-count (atom 0)
         summary-sheet (.createSheet swb "Summe Artikel")
+        summary-write-cell-fn (partial write-cell (.createRow summary-sheet (swap! summary-row-count inc)))
         company-row-count (atom 0)
-        company-sheet (.createSheet swb "Summe je Firma")]
+        company-sheet (.createSheet swb "Summe je Firma")
+        company-write-cell-fn (partial write-cell (.createRow company-sheet (swap! company-row-count inc)))
+        ]
     (doseq [[item amount] @order-summary-item]
-      (let [write-cell (partial write-cell (.createRow summary-sheet (swap! summary-row-count inc)))
+      (let [write-cell summary-write-cell-fn
             price (get PRICE item)]
         (write-cell 0 (name item))
         (write-cell 1 amount)
@@ -110,7 +113,7 @@
         (write-cell 3 (* price amount))))
     (doseq [[company item-amount-map] @order-summary-company]
       (doseq [[item amount] item-amount-map]
-        (let [write-cell (partial write-cell (.createRow company-sheet (swap! company-row-count inc)))
+        (let [write-cell company-write-cell-fn
               price (get PRICE item)]
           (write-cell 0 company)
           (write-cell 1 (name item))
@@ -140,6 +143,6 @@
     ))
 
 (defn cls-execute
-  [this ^String filename ^String out-filename]
+  [^String filename ^String out-filename]
   (load-wb filename out-filename)
   nil)
