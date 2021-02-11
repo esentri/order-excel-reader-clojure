@@ -1,7 +1,7 @@
-(ns poi-test.core
+(ns com.esentri.clojure.order.core
   (:gen-class)
   (:require
-    [poi-test.excel :as excel])
+    [com.esentri.clojure.order.excel :as excel])
   )
 
 

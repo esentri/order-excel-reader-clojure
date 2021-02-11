@@ -1,10 +1,11 @@
-(ns poi-test.excel
+(ns com.esentri.clojure.order.excel
   (:gen-class
-    :name com.esentri.clojure.excel.reader
+    :name com.esentri.clojure.order.excel.reader
     :prefix "cls-"
     :main false
     :methods [^:static [execute [String String] void]])
-  (:use [clojure.java.io :only [output-stream]])
+  (:use [clojure.java.io :only [output-stream]]
+        [clojure.set :only [rename-keys]])
   (:import
     (org.apache.poi.xssf.usermodel XSSFWorkbook XSSFRichTextString)
     (org.apache.poi.xssf.streaming SXSSFWorkbook)
@@ -79,67 +80,59 @@
 (defn write-cell [out-row index value]
   (.setCellValue (.createCell out-row index) value))
 (defn callback [item-sheet row]
-;nil)
-;  (println row)
-  (when (not= "Menge" (:D row))
-    (let [item (keyword (:C row))
-          amount (:D row)
-          price (get PRICE item)
-          write-cell (partial write-cell (.createRow item-sheet (swap! item-row-count inc)))
-        ]
-      (write-cell 0 (:A row)) ;company
-      (write-cell 1 (:B row)) ;department
-      (write-cell 2 (:C row)) ;item
-      (write-cell 3 amount) ;amount
-      (write-cell 4 price)
-      (write-cell 5 (* price amount))
-      (swap! order-summary-company update-in [(:A row) item] ad0 amount)
-      (swap! order-summary-item update-in [item] ad0 amount))))
+  (let [order (rename-keys row {:A :company, :B :department, :C :item, :D :amount})]
+    (when (not= "Menge" (:amount order))
+      (let [item-key (keyword (:item order))
+            amount (:amount order)
+            price (get PRICE item-key)
+            write-cell-fn (partial write-cell (.createRow item-sheet (swap! item-row-count inc)))
+          ]
+        (write-cell-fn 0 (:company order))
+        (write-cell-fn 1 (:department order))
+        (write-cell-fn 2 (:item order))
+        (write-cell-fn 3 amount) ;amount
+        (write-cell-fn 4 price)
+        (write-cell-fn 5 (* price amount))
+        (swap! order-summary-company update-in [(:company order) item-key] ad0 amount)
+        (swap! order-summary-item update-in [item-key] ad0 amount)))))
 
 (defn finalize [swb]
   (let [summary-row-count (atom 0)
         summary-sheet (.createSheet swb "Summe Artikel")
-        summary-write-cell-fn (partial write-cell (.createRow summary-sheet (swap! summary-row-count inc)))
-        company-row-count (atom 0)
-        company-sheet (.createSheet swb "Summe je Firma")
-        company-write-cell-fn (partial write-cell (.createRow company-sheet (swap! company-row-count inc)))
-        ]
+        write-cell-fn (partial write-cell (.createRow summary-sheet (swap! summary-row-count inc)))]
     (doseq [[item amount] @order-summary-item]
-      (let [write-cell summary-write-cell-fn
-            price (get PRICE item)]
-        (write-cell 0 (name item))
-        (write-cell 1 amount)
-        (write-cell 2 price)
-        (write-cell 3 (* price amount))))
+      (let [price (get PRICE item)]
+        (write-cell-fn 0 (name item))
+        (write-cell-fn 1 amount)
+        (write-cell-fn 2 price)
+        (write-cell-fn 3 (* price amount)))))
+  (let [company-row-count (atom 0)
+        company-sheet (.createSheet swb "Summe je Firma")
+        write-cell-fn (partial write-cell (.createRow company-sheet (swap! company-row-count inc)))
+        ]
     (doseq [[company item-amount-map] @order-summary-company]
       (doseq [[item amount] item-amount-map]
-        (let [write-cell company-write-cell-fn
-              price (get PRICE item)]
-          (write-cell 0 company)
-          (write-cell 1 (name item))
-          (write-cell 2 amount)
-          (write-cell 3 price)
-          (write-cell 4 (* price amount)))))))
+        (let [price (get PRICE item)]
+          (write-cell-fn 0 company)
+          (write-cell-fn 1 (name item))
+          (write-cell-fn 2 amount)
+          (write-cell-fn 3 price)
+          (write-cell-fn 4 (* price amount)))))))
 
 (defn load-wb
   [^String filename ^String out-filename]
-  (let [pkg   (OPCPackage/open filename PackageAccess/READ)
-        wb    (XSSFWorkbook. pkg)
-        swb   (SXSSFWorkbook. 100)
-        _     (.setCompressTempFiles swb true)
-        item-sheet (.createSheet swb "Einzelposten")
-        r     (XSSFReader. pkg)
-        sst   (.getSharedStringsTable r)
-        parser (getParser sst (partial callback item-sheet))
-        iter   (.getSheetsData r)
-        sheet-input-source  (.next iter)
-        ]; r (.getSheetIndex wb "ESPRIT-Members"))]
-    (.parse parser (InputSource. sheet-input-source))
-    (.close sheet-input-source)
-    (finalize swb)
+  (let [out-wb   (SXSSFWorkbook. 1)
+        item-sheet (.createSheet out-wb "Einzelposten")
+        r     (XSSFReader. (OPCPackage/open filename PackageAccess/READ))
+        parser (getParser (.getSharedStringsTable r) (partial callback item-sheet))]
+    (reset! order-summary-item {})
+    (reset! order-summary-company {})
+    (reset! item-row-count 0)
+    (.parse parser (InputSource. (.next (.getSheetsData r))))
+    (finalize out-wb)
     (with-open [o (output-stream out-filename)]
-      (.write swb o))
-    (.dispose swb)
+      (.write out-wb o))
+    (.dispose out-wb)
     ))
 
 (defn cls-execute
